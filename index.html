@@ -301,43 +301,189 @@ main > section[id] { scroll-margin-top: 4.25rem; }
   .js .flow.in [data-step] { animation: rise .55s var(--ease) both; animation-delay: calc(var(--i) * 110ms); }
 }
 
-/* Timeline: a chart on wide screens, a list on narrow ones and for screen readers */
-.timeline { margin-top: clamp(2.5rem, 6vw, 4.5rem); }
-.chart { margin: 0; display: none; }
-.chart svg { display: block; width: 100%; height: auto; overflow: visible; font-family: inherit; }
-.axis, .tick { stroke: var(--ink); stroke-width: 1.5; }
-.year { fill: var(--slate); font-size: 14px; font-stretch: 90%; text-anchor: middle; font-variant-numeric: tabular-nums; }
-.bar { stroke-width: 10; stroke-linecap: round; }
-.bar-school { stroke: var(--ink); }
-.bar-uct { stroke: var(--sea-ink); }
-.bar-future { stroke: var(--sea-ink); opacity: .3; }
-.bar-label { fill: var(--ink); font-size: 14.5px; font-weight: 600; text-anchor: middle; }
-.leader { stroke: var(--slate); stroke-width: 1; }
-.dot { fill: var(--white); stroke: var(--sea-ink); stroke-width: 2.5; }
-.ev-title { fill: var(--ink); font-size: 15px; font-weight: 650; }
-.ev-sub { fill: var(--slate); font-size: 13.5px; }
-.now { fill: var(--slate); font-size: 12.5px; font-style: italic; text-anchor: middle; }
-.now-dot { fill: var(--sea-ink); }
-.milestones { list-style: none; margin: 0; padding: 0 0 0 1.25rem; border-left: 2px solid var(--rule); }
-.milestones li { position: relative; padding: 0 0 1.4rem 1rem; }
-.milestones li:last-child { padding-bottom: 0; }
-.milestones li::before {
-  content: ""; position: absolute; left: -1.25rem; top: .45rem; width: .8rem; height: .8rem; margin-left: -.47rem;
-  border-radius: 50%; background: var(--white); border: 2.5px solid var(--sea-ink);
+/* Timeline: Past → Now → Next.
+   The events are one ordered list. Narrow screens show it as a vertical timeline. Wide screens place the same
+   items on a grid of 108 month columns, January 2020 to December 2028 (grid line = (year − 2020) × 12 + month):
+   range bars for each school, milestone cards in lanes above and below the axis, and a "Now" marker. */
+.timeline {
+  --tl-line: var(--ink);          /* the past */
+  --tl-future: var(--slate);      /* dashes after "Now" */
+  --tl-accent: var(--sea-ink);
+  --tl-stem-c: var(--slate);
+  --tl-stroke: 2px;               /* line thickness */
+  --tl-stem-w: 1.5px;
+  --tl-bar: .625rem;              /* range bar thickness */
+  --tl-dot: .875rem;              /* marker size */
+  --tl-gap: 1rem;                 /* space between items in the vertical timeline */
+  --tl-my: 1.425rem;              /* a marker's height within its item, level with the date */
+  --tl-radius: 12px;
+  --tl-lift: -3px;
+  --tl-t-fast: 200ms;             /* hover and focus */
+  --tl-t: 350ms;                  /* cards */
+  --tl-t-line: 450ms;             /* lines and bars */
+  --tl-stagger: 90ms;
+  --tl-ease: var(--ease-out);
+  margin-top: clamp(2.5rem, 6vw, 4.5rem);
 }
-.milestones time { display: block; color: var(--slate); font-size: .9rem; font-stretch: 90%; font-variant-numeric: tabular-nums; }
-@media (min-width: 960px) {
-  .js .chart { display: block; }
-  .js .milestones { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tl-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .6rem 2rem; margin-bottom: clamp(1.5rem, 3vw, 2.25rem); padding-bottom: .85rem; border-bottom: 1px solid var(--rule); }
+.tl-title { margin: 0; font-size: clamp(1.35rem, 2.2vw, 1.75rem); font-weight: 700; font-stretch: 105%; line-height: 1.2; }
+.tl-key { display: flex; align-items: center; gap: .6rem; margin: 0; color: var(--slate); font-size: .9rem; font-weight: 500; }
+.tl-key i { display: block; flex: none; }
+.k-solid, .k-dashed { width: 1.75rem; height: var(--tl-stroke); }
+.k-solid { background: var(--tl-line); }
+.k-dashed { background: repeating-linear-gradient(90deg, var(--tl-future) 0 5px, transparent 5px 9px); }
+.k-now { display: inline-flex; align-items: center; gap: .4rem; color: var(--ink); font-weight: 650; }
+.k-dot { width: .625rem; height: .625rem; border-radius: 50%; background: var(--tl-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tl-accent) 22%, transparent); }
+
+.tl { --tl-now: 81.55; }          /* months since January 2020; the script keeps it on today's date */
+.tl-list { display: grid; gap: var(--tl-gap); max-width: 44rem; margin: 0; padding: 0; list-style: none; }
+.tl-ev { position: relative; padding-left: 2.25rem; }
+.tl-ev::before {                  /* the line, from this item's marker down to the next one */
+  content: ""; position: absolute; left: .6875rem; top: var(--tl-my); bottom: calc(-1 * (var(--tl-gap) + 1.425rem));
+  width: var(--tl-stroke); margin-left: calc(var(--tl-stroke) / -2); background: var(--tl-line); transform-origin: 50% 0;
+}
+.tl-ev::after {                   /* the marker */
+  content: ""; position: absolute; z-index: 2; left: .6875rem; top: var(--tl-my); width: var(--tl-dot); height: var(--tl-dot);
+  translate: -50% -50%; border: 2.5px solid var(--tl-accent); border-radius: 50%; background: var(--white);
+  transition: background-color var(--tl-t-fast) var(--tl-ease), scale var(--tl-t-fast) var(--tl-ease);
+}
+[data-tl="school"] { --tl-bar-c: var(--ink); }
+[data-tl="uct"] { --tl-bar-c: var(--tl-accent); }
+[data-tl="school"]:is(:hover, :focus-within) { --tl-bar-c: var(--tl-accent); }
+.tl-ev[data-kind="range"]::after { width: .625rem; height: 1.25rem; border: 0; border-radius: 999px; background: var(--tl-bar-c); }
+.tl-ev[data-phase="next"] { --tl-my: 3.675rem; }      /* sits below the "Now" marker */
+.tl-ev[data-phase="next"]::before {                   /* dashed from "Now" to graduation */
+  top: .75rem; bottom: auto; height: calc(var(--tl-my) - .75rem);
+  background: repeating-linear-gradient(180deg, var(--tl-future) 0 6px, transparent 6px 11px);
+}
+.tl-ev[data-phase="next"]::after { border-style: dashed; border-width: 2px; }
+
+.tl-card {
+  position: relative; z-index: 1; display: flex; flex-direction: column; gap: .15rem;
+  padding: .85rem 1rem .95rem; border: 1px solid var(--rule); border-radius: var(--tl-radius); background: var(--paper);
+  transition: transform var(--tl-t-fast) var(--tl-ease), border-color var(--tl-t-fast) var(--tl-ease), box-shadow var(--tl-t-fast) var(--tl-ease);
+}
+.tl-ev[data-phase="next"] .tl-card { border-style: dashed; background: var(--white); }
+.tl-date { order: -1; margin: 0; color: var(--tl-accent); font-size: .85rem; font-weight: 600; font-stretch: 94%; line-height: 1.35; font-variant-numeric: tabular-nums; }
+.tl-name { margin: 0; font-size: 1.0625rem; font-weight: 650; line-height: 1.3; }
+.tl-name a { color: inherit; text-decoration: none; }
+.tl-name a::after { content: ""; position: absolute; z-index: 1; inset: 0; border-radius: var(--tl-radius); }
+.tl-name a:focus-visible { outline: none; }
+.tl-name a:focus-visible::after { outline: 3px solid var(--focus, var(--sea-ink)); outline-offset: 3px; }
+.tl-out { margin: 0; color: var(--slate); font-size: .95rem; line-height: 1.45; }
+
+/* Hover and keyboard focus: the card lifts, and its border and marker brighten */
+.tl-card:hover { border-color: var(--tl-accent); box-shadow: 0 12px 24px -18px color-mix(in srgb, var(--sea-deep) 70%, transparent); }
+.tl-ev:has(a:focus-visible) .tl-card { border-color: var(--tl-accent); box-shadow: 0 12px 24px -18px color-mix(in srgb, var(--sea-deep) 70%, transparent); }
+.tl-card:hover .tl-name a, .tl-name a:focus-visible { text-decoration: underline; text-decoration-thickness: .08em; text-underline-offset: .18em; }
+.tl-ev:hover::after { z-index: 3; background: var(--tl-accent); }
+.tl-ev:focus-within::after { z-index: 3; background: var(--tl-accent); }
+@media (prefers-reduced-motion: no-preference) {
+  .tl-card:hover { transform: translateY(var(--tl-lift)); }
+  .tl-ev:has(a:focus-visible) .tl-card { transform: translateY(var(--tl-lift)); }
+  .tl-ev:hover::after { scale: 1.2; }
+  .tl-ev:focus-within::after { scale: 1.2; }
+}
+
+/* "Now": a labelled marker where the past meets the future */
+.tl-now {
+  position: relative; z-index: 2; display: inline-flex; align-items: center; gap: .4rem; height: 1.5rem;
+  padding: 0 .7rem 0 .4375rem;    /* puts the dot's centre .6875rem from the left edge, on the line */
+  border-radius: 999px; background: var(--tl-accent); color: var(--white);
+  font-size: .75rem; font-weight: 700; line-height: 1; letter-spacing: .08em; text-transform: uppercase;
+}
+.tl-now::before { content: ""; flex: none; width: .5rem; height: .5rem; border-radius: 50%; background: var(--white); }
+.tl-now-list[hidden] { display: inline-flex; margin: 0 0 .75rem -2.25rem; }
+/* Wide screens: the same list as a horizontal chart */
+@media screen and (min-width: 960px) {
+  @supports (grid-template-rows: subgrid) {
+    .tl {
+      --tl-axis: 3.35rem;           /* the axis row: line, ticks and years */
+      --tl-line-y: 1.125rem;        /* the line's height within that row */
+      --tl-stem: 2.25rem;           /* space between a card and the axis */
+      display: grid; grid-template-columns: repeat(108, minmax(0, 1fr)); grid-template-rows: auto var(--tl-axis) auto auto;
+    }
+    .tl-list { grid-area: 1 / 1 / -1 / -1; display: grid; grid-template-columns: subgrid; grid-template-rows: subgrid; gap: 0; max-width: none; }
+    .tl-scale[hidden] { display: block; position: relative; grid-area: 2 / 1 / 3 / -1; }
+    .tl-scale::before {             /* the axis: solid up to now, dashed after it, ending at graduation */
+      content: ""; position: absolute; left: 0; top: var(--tl-line-y); width: calc(100% * 107 / 108); height: var(--tl-stroke); translate: 0 -50%;
+      background: linear-gradient(90deg, var(--tl-line) calc(var(--tl-now) / 107 * 100%), transparent 0), repeating-linear-gradient(90deg, var(--tl-future) 0 7px, transparent 7px 13px);
+    }
+    .tl-years {
+      position: absolute; inset: 0; display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); padding-top: 2.15rem;
+      background: repeating-linear-gradient(90deg, var(--slate) 0 1.5px, transparent 1.5px calc(100% / 9)) 0 var(--tl-line-y) / 100% .4rem no-repeat;
+      color: var(--slate); font-size: .8125rem; font-stretch: 92%; line-height: 1; font-variant-numeric: tabular-nums;
+    }
+    .tl-years span { justify-self: start; width: max-content; translate: -50% 0; }
+    .tl-scale .tl-now { position: absolute; left: calc(var(--tl-now) / 108 * 100% - .6875rem); top: calc(var(--tl-line-y) - .75rem); }
+    .tl-now-list[hidden] { display: none; }
+
+    .tl-ev { grid-column: var(--from) / var(--to); padding: 0; }
+    .tl-ev[data-lane="a"] { grid-row: 1; align-self: end; margin-bottom: var(--tl-stem); }
+    .tl-ev[data-lane="b"] { grid-row: 3; align-self: start; margin-top: var(--tl-stem); }
+    .tl-ev[data-kind="range"] { grid-row: 4; align-self: start; margin-top: 2rem; padding-top: calc(var(--tl-bar) + .7rem); }
+    .tl-name { font-size: 1rem; }
+    [data-lane="a"][data-anchor="end"] .tl-card { border-bottom-right-radius: 3px; }
+    [data-lane="a"][data-anchor="start"] .tl-card { border-bottom-left-radius: 3px; }
+    [data-lane="b"][data-anchor="end"] .tl-card { border-top-right-radius: 3px; }
+
+    /* Stems join each card to its marker on the axis */
+    .tl-ev::before { left: 0; top: auto; bottom: auto; width: var(--tl-stem-w); margin-left: calc(var(--tl-stem-w) / -2); background: var(--tl-stem-c); }
+    .tl-ev::after { left: 0; }
+    .tl-ev[data-anchor="end"]::before, .tl-ev[data-anchor="end"]::after { left: 100%; }
+    .tl-ev[data-lane="a"]::before { top: calc(100% - 4px); bottom: auto; height: calc(var(--tl-stem) + var(--tl-line-y) + 4px); }
+    .tl-ev[data-lane="b"]::before { top: auto; bottom: calc(100% - 4px); height: calc(var(--tl-stem) + var(--tl-axis) - var(--tl-line-y) + 4px); }
+    .tl-ev[data-lane="a"]::after { top: calc(100% + var(--tl-stem) + var(--tl-line-y)); }
+    .tl-ev[data-lane="b"]::after { top: calc(-1 * (var(--tl-stem) + var(--tl-axis) - var(--tl-line-y))); }
+    .tl-ev[data-phase="next"]::before { background: repeating-linear-gradient(180deg, var(--tl-future) 0 4px, transparent 4px 7px); }
+
+    /* Range bars, labelled underneath; the BSc turns lighter after "Now" */
+    .tl-ev[data-kind="range"]::before {
+      top: 0; bottom: auto; width: 100%; height: var(--tl-bar); margin: 0; border-radius: 999px; background: var(--tl-bar-c);
+      transform-origin: 0 50%; transition: background-color var(--tl-t-fast) var(--tl-ease), box-shadow var(--tl-t-fast) var(--tl-ease);
+    }
+    .tl-ev[data-tl="uct"]::before { background: linear-gradient(90deg, var(--tl-bar-c) calc((var(--tl-now) - 73) / 34 * 100%), color-mix(in srgb, var(--tl-bar-c) 30%, var(--white)) 0); }
+    .tl-ev[data-kind="range"]:is(:hover, :focus-within)::before { box-shadow: 0 0 0 4px color-mix(in srgb, var(--tl-accent) 22%, transparent); }
+    .tl-ev[data-kind="range"]::after { display: none; }
+    .tl-ev[data-kind="range"] .tl-card { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; transform: none; }
+    .tl-ev[data-kind="range"] .tl-name a::after { inset: calc(-1 * (var(--tl-bar) + .7rem)) -.5rem -.5rem; border-radius: 8px; }
+  }
+}
+/* Timeline motion, played once: the line draws, cards rise in date order as their markers pop in, and "Now" pulses
+   once. Users who prefer reduced motion get the finished layout straight away. */
+@keyframes tl-rise { from { opacity: 0; translate: 0 8px; } }
+@keyframes tl-pop { from { scale: 0; } }
+@keyframes tl-fade { from { opacity: 0; } }
+@keyframes tl-draw { from { clip-path: inset(0 100% 0 0); } }
+@keyframes tl-drop { from { scale: 1 0; } }
+@keyframes tl-pulse {
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--tl-accent) 45%, transparent); }
+  to { box-shadow: 0 0 0 12px color-mix(in srgb, var(--tl-accent) 0%, transparent); }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .chart .draw { stroke-dasharray: 1; stroke-dashoffset: 1; }
-  .chart .pop { opacity: 0; }
-  .chart.play .draw { animation: draw 1s cubic-bezier(.6, 0, .2, 1) forwards; animation-delay: var(--d, 0s); }
-  .chart.play .pop { animation: pop .45s ease-out forwards; animation-delay: var(--d, 0s); }
+  @media (max-width: 959px) {     /* each item as it scrolls into view */
+    .js .tl-ev:not(.in) .tl-card, .js .tl-ev:not(.in) .tl-now { opacity: 0; }
+    .js .tl-ev:not(.in)::before { scale: 1 0; }
+    .js .tl-ev:not(.in)::after { scale: 0; }
+    .js .tl-ev.in { --d: calc(var(--k, 0) * var(--tl-stagger)); }
+    .js .tl-ev.in .tl-card { animation: tl-rise var(--tl-t) var(--tl-ease) var(--d) backwards; }
+    .js .tl-ev.in::after { animation: tl-pop 250ms var(--tl-ease) var(--d) backwards; }
+    .js .tl-ev.in::before { animation: tl-drop var(--tl-t-line) var(--tl-ease) calc(var(--d) + 150ms) backwards; }
+    .js .tl-ev.in .tl-now { animation: tl-fade 300ms var(--tl-ease) var(--d) backwards, tl-pulse 1.4s var(--tl-ease) calc(var(--d) + 300ms) 1; }
+  }
+  @media (min-width: 960px) {     /* the whole chart: line first, then the cards in date order */
+    .js .tl:not(.in) .tl-card, .js .tl:not(.in) .tl-now, .js .tl:not(.in) .tl-ev::before { opacity: 0; }
+    .js .tl:not(.in) .tl-ev::after { scale: 0; }
+    .js .tl:not(.in) .tl-scale::before, .js .tl:not(.in) [data-kind="range"]::before { clip-path: inset(0 100% 0 0); }
+    .js .tl.in .tl-ev { --d: calc(220ms + var(--i, 0) * var(--tl-stagger)); }
+    .js .tl.in .tl-scale::before { animation: tl-draw var(--tl-t-line) var(--tl-ease) backwards; }
+    .js .tl.in .tl-card { animation: tl-rise var(--tl-t) var(--tl-ease) var(--d) backwards; }
+    .js .tl.in .tl-ev::after { animation: tl-pop 250ms var(--tl-ease) var(--d) backwards; }
+    .js .tl.in .tl-ev::before { animation: tl-fade var(--tl-t) var(--tl-ease) var(--d) backwards; }
+    .js .tl.in [data-kind="range"]::before { animation: tl-draw var(--tl-t-line) var(--tl-ease) calc(var(--d) - 120ms) backwards; }
+    .js .tl.in .tl-now { animation: tl-fade 300ms var(--tl-ease) 380ms backwards, tl-pulse 1.4s var(--tl-ease) 650ms 1; }
+  }
 }
-@keyframes draw { to { stroke-dashoffset: 0; } }
-@keyframes pop { to { opacity: 1; } }
 
 /* Resume */
 .based { margin: -1.25rem 0 2.5rem; color: var(--slate); }
@@ -346,6 +492,7 @@ main > section[id] { scroll-margin-top: 4.25rem; }
 .subhead { margin: 0 0 1.1rem; padding-bottom: .55rem; border-bottom: 2px solid var(--sea-ink); color: var(--sea-ink); font-size: 1.15rem; font-weight: 700; font-stretch: 108%; }
 .group + .group { margin-top: 2.5rem; }
 .entry + .entry { margin-top: 1.5rem; }
+.entry[id] { scroll-margin-top: 5rem; }
 .entry h4, .cert h4 { margin: 0; font-size: 1.0625rem; font-weight: 650; line-height: 1.4; }
 .entry p { margin: 0; }
 .entry ul { margin: .35rem 0 0; padding-left: 1.1rem; }
@@ -397,10 +544,11 @@ footer { border-top: 1px solid var(--rule-sea); color: var(--on-sea-muted); font
 .to-top svg { width: 1.2rem; height: 1.2rem; }
 
 @media print {
-  .topbar, .progress, .to-top, .band, .field, .chart, .theme, .menu, .skip, .actions, .merge { display: none !important; }
+  .topbar, .progress, .to-top, .band, .field, .tl-scale, .tl-now, .tl-key, .theme, .menu, .skip, .actions, .merge { display: none !important; }
   body, body * { color: #000 !important; background: transparent !important; border-color: #999 !important; animation: none !important; transition: none !important; }
   .js [data-reveal] > span, .js .steps li, .js .flow [data-step] { opacity: 1 !important; transform: none !important; filter: none !important; }
-  .js .milestones { position: static !important; width: auto !important; height: auto !important; overflow: visible !important; clip: auto !important; white-space: normal !important; }
+  .tl-card { opacity: 1 !important; transform: none !important; }
+  .tl-ev::before, .tl-ev::after { opacity: 1 !important; scale: none !important; animation: none !important; }
   .pipeline li::before, .pipeline li::after { display: none !important; }
   .section, .hero { padding-block: 1.5rem; }
   .name { font-size: 3.5rem; }
@@ -527,18 +675,61 @@ footer { border-top: 1px solid var(--rule-sea); color: var(--on-sea-muted); font
         </div>
       </div>
       <div class="timeline">
-        <h3 class="visually-hidden">Timeline</h3>
-        <figure class="chart" aria-hidden="true">
-          <svg id="timeline" viewBox="0 0 1000 250" role="presentation" focusable="false"></svg>
-        </figure>
-        <ol class="milestones">
-          <li><time>2020 to 2025</time>St George’s College, Harare: Cambridge A Levels in Computer Science, Physics and Mathematics</li>
-          <li><time>2024</time>Microsoft Imagine Cup Junior: designed GAIA, an AI concept, with a teammate</li>
-          <li><time>2024</time>Orate Africa Moot Court Championships: first place with Team Zimbabwe, and named Best Male Speaker</li>
-          <li><time>February 2026</time>Started a BSc at the University of Cape Town</li>
-          <li><time>June to July 2026</time>Data Science Intern at Frampol Africa</li>
-          <li><time>November 2028</time>Expected graduation</li>
-        </ol>
+        <div class="tl-head">
+          <h3 class="tl-title">Timeline</h3>
+          <p class="tl-key" aria-hidden="true"><span>Past</span> <i class="k-solid"></i> <span class="k-now"><i class="k-dot"></i>Now</span> <i class="k-dashed"></i> <span>Next</span></p>
+        </div>
+        <div class="tl">
+          <div class="tl-scale" hidden aria-hidden="true">
+            <div class="tl-years"><span>2020</span><span>2021</span><span>2022</span><span>2023</span><span>2024</span><span>2025</span><span>2026</span><span>2027</span><span>2028</span></div>
+            <span class="tl-now">Now</span>
+          </div>
+          <ol class="tl-list">
+            <li class="tl-ev" data-kind="range" data-tl="school" style="--from: 1; --to: 73; --i: 0">
+              <div class="tl-card">
+                <h4 class="tl-name"><a href="#resume-school">St George’s College, Harare</a></h4>
+                <p class="tl-date"><time datetime="2020">2020</time> to <time datetime="2025">2025</time></p>
+                <p class="tl-out">Cambridge A Levels in Computer Science, Physics and Mathematics</p>
+              </div>
+            </li>
+            <li class="tl-ev" data-lane="a" data-anchor="end" style="--from: 25; --to: 55; --i: 1">
+              <div class="tl-card">
+                <h4 class="tl-name"><a href="#projects">Microsoft Imagine Cup Junior</a></h4>
+                <p class="tl-date"><time datetime="2024">2024</time></p>
+                <p class="tl-out">Designed GAIA, an AI concept, with a teammate</p>
+              </div>
+            </li>
+            <li class="tl-ev" data-lane="b" data-anchor="end" style="--from: 25; --to: 55; --i: 2">
+              <div class="tl-card">
+                <h4 class="tl-name"><a href="#resume-orate">Orate Africa Moot Court Championships</a></h4>
+                <p class="tl-date"><time datetime="2024">2024</time></p>
+                <p class="tl-out">First place with Team Zimbabwe, and named Best Male Speaker</p>
+              </div>
+            </li>
+            <li class="tl-ev" data-kind="range" data-tl="uct" style="--from: 74; --to: 108; --i: 3">
+              <div class="tl-card">
+                <h4 class="tl-name"><a href="#resume-uct">BSc, University of Cape Town</a></h4>
+                <p class="tl-date"><time datetime="2026-02">February 2026</time> to <time datetime="2028-11">November 2028</time> (expected)</p>
+                <p class="tl-out">Majoring in Computer Science and Statistics &amp; Data Science</p>
+              </div>
+            </li>
+            <li class="tl-ev" data-lane="a" data-anchor="start" style="--from: 79; --to: 107; --i: 4">
+              <div class="tl-card">
+                <h4 class="tl-name"><a href="#resume-frampol">Data Science Intern, Frampol Africa</a></h4>
+                <p class="tl-date"><time datetime="2026-06">June</time> to <time datetime="2026-07">July 2026</time></p>
+                <p class="tl-out">Gained an introduction to Power BI and core data analysis concepts</p>
+              </div>
+            </li>
+            <li class="tl-ev" data-lane="b" data-anchor="end" data-phase="next" style="--from: 84; --to: 108; --i: 5">
+              <span class="tl-now tl-now-list" hidden aria-hidden="true">Now</span>
+              <div class="tl-card">
+                <h4 class="tl-name"><a href="#resume-uct">Expected graduation</a></h4>
+                <p class="tl-date"><time datetime="2028-11">November 2028</time></p>
+                <p class="tl-out">BSc, University of Cape Town</p>
+              </div>
+            </li>
+          </ol>
+        </div>
       </div>
     </div>
   </section>
@@ -551,7 +742,7 @@ footer { border-top: 1px solid var(--rule-sea); color: var(--on-sea-muted); font
         <div>
           <div class="group">
             <h3 class="subhead">Education</h3>
-            <article class="entry">
+            <article class="entry" id="resume-uct">
               <h4>BSc, majoring in Computer Science and Statistics &amp; Data Science</h4>
               <p class="meta">University of Cape Town, Cape Town. February 2026 to November 2028 (expected)</p>
               <ul>
@@ -559,7 +750,7 @@ footer { border-top: 1px solid var(--rule-sea); color: var(--on-sea-muted); font
                 <li>Member of the UCT Developer Society (DevSoc) and the Statistics Geeks Society.</li>
               </ul>
             </article>
-            <article class="entry">
+            <article class="entry" id="resume-school">
               <h4>Cambridge A Levels: Computer Science, Physics and Mathematics</h4>
               <p class="meta">St George’s College, Harare. January 2020 to December 2025</p>
               <ul>
@@ -569,7 +760,7 @@ footer { border-top: 1px solid var(--rule-sea); color: var(--on-sea-muted); font
           </div>
           <div class="group">
             <h3 class="subhead">Experience</h3>
-            <article class="entry">
+            <article class="entry" id="resume-frampol">
               <h4>Data Science Intern, Frampol Africa</h4>
               <p class="meta">Harare, Zimbabwe. June to July 2026, four-week full-time placement</p>
               <ul>
@@ -590,7 +781,7 @@ footer { border-top: 1px solid var(--rule-sea); color: var(--on-sea-muted); font
         <div>
           <div class="group">
             <h3 class="subhead">Achievements and leadership</h3>
-            <article class="entry">
+            <article class="entry" id="resume-orate">
               <h4>Orate Africa Moot Court Championships 2024 (SADC region)</h4>
               <p>Won first place with Team Zimbabwe out of 19 schools from seven countries in Gaborone, Botswana, and was named Best Male Speaker. The team was received at State House by the President of Zimbabwe in April 2025 (<a href="https://www.heraldonline.co.zw/president-meets-2024-moot-competition-winners/">The Herald’s report</a>).</p>
             </article>
@@ -858,67 +1049,41 @@ footer { border-top: 1px solid var(--rule-sea); color: var(--on-sea-muted); font
   window.addEventListener('resize', onScroll);
   onScroll();
 
-  /* Timeline chart */
-  const svg = document.getElementById('timeline');
-  if (svg) {
-    const NS = 'http://www.w3.org/2000/svg';
-    const W = 1000, L = 24, R = 24, AXIS = 168, Y0 = 2020, Y1 = 2029;
-    const x = (y) => L + (y - Y0) / (Y1 - Y0) * (W - L - R);
-    const el = (tag, attrs) => {
-      const n = document.createElementNS(NS, tag);
-      for (const k in attrs) n.setAttribute(k, attrs[k]);
-      svg.appendChild(n);
-      return n;
-    };
-    const label = (str, attrs) => { const t = el('text', attrs); t.textContent = str; return t; };
-    const d = (s) => `--d:${s}s`;
-
-    el('line', { x1: L, x2: W - R, y1: AXIS, y2: AXIS, class: 'axis draw', pathLength: 1 });
-    for (let y = Y0; y <= Y1; y++) {
-      el('line', { x1: x(y), x2: x(y), y1: AXIS, y2: AXIS + 7, class: 'tick' });
-      if (y < Y1) label(String(y), { x: x(y), y: AXIS + 27, class: 'year' });
-    }
-
+  /* Timeline: keep the "Now" marker on today's date, between the start of the BSc and graduation */
+  const timeline = document.querySelector('.tl');
+  if (timeline) {
     const today = new Date();
-    const now = today.getFullYear() + today.getMonth() / 12 + (today.getDate() - 1) / 365;
-    const uctStart = 2026.1, uctEnd = 2028.85, uctNow = Math.min(Math.max(now, uctStart), uctEnd);
-    el('line', { x1: x(2020.02), x2: x(2025.93), y1: AXIS, y2: AXIS, class: 'bar bar-school draw', pathLength: 1, style: d(.35) });
-    el('line', { x1: x(uctStart), x2: x(uctNow), y1: AXIS, y2: AXIS, class: 'bar bar-uct draw', pathLength: 1, style: d(.8) });
-    if (uctNow < uctEnd) el('line', { x1: x(uctNow), x2: x(uctEnd), y1: AXIS, y2: AXIS, class: 'bar bar-future pop', style: d(1.2) });
-    label('St George’s College, Harare', { x: x(2023), y: AXIS + 56, class: 'bar-label pop', style: d(.6) });
-    label('BSc, University of Cape Town', { x: x(2027.5), y: AXIS + 56, class: 'bar-label pop', style: d(1) });
-    if (now > uctStart && now < uctEnd) {
-      el('circle', { cx: x(now), cy: AXIS, r: 3.5, class: 'now-dot pop', style: d(1.3) });
-      label('now', { x: x(now), y: AXIS - 14, class: 'now pop', style: d(1.3) });
-    }
-
-    const events = [
-      { at: 2024.3, lane: 2, title: 'Imagine Cup Junior', sub: '2024, designed GAIA' },
-      { at: 2024.75, lane: 1, title: 'Orate Africa champions', sub: '2024, Best Male Speaker' },
-      { at: 2026.45, lane: 2, title: 'Intern at Frampol Africa', sub: 'June to July 2026' },
-    ];
-    events.forEach((e, i) => {
-      const lineTop = e.lane === 1 ? AXIS - 74 : AXIS - 134;
-      const delay = 1.4 + i * .18;
-      el('line', { x1: x(e.at), x2: x(e.at), y1: AXIS - 8, y2: lineTop, class: 'leader pop', style: d(delay) });
-      el('circle', { cx: x(e.at), cy: AXIS, r: 6, class: 'dot pop', style: d(delay) });
-      label(e.title, { x: x(e.at) + 9, y: lineTop + 13, class: 'ev-title pop', style: d(delay) });
-      label(e.sub, { x: x(e.at) + 9, y: lineTop + 31, class: 'ev-sub pop', style: d(delay) });
-    });
+    const days = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const months = (today.getFullYear() - 2020) * 12 + today.getMonth() + (today.getDate() - 1) / days;
+    timeline.style.setProperty('--tl-now', Math.min(Math.max(months, 73), 107).toFixed(2));
   }
 
-  /* Play each reveal once, when it scrolls into view */
-  const revealed = document.querySelectorAll('[data-reveal], .steps, .chart, .flow');
-  const show = (node) => node.classList.add('in', 'play');
+  /* Play each reveal once, when it scrolls into view. Timeline items that arrive together are staggered,
+     and the wide timeline plays as one piece once a third of it is in view. */
+  const revealed = document.querySelectorAll('[data-reveal], .steps, .flow, .tl-ev');
+  const show = (node) => node.classList.add('in');
   if (hasObserver) {
     const io = new IntersectionObserver((entries) => {
+      let k = 0;
       entries.forEach((entry) => {
-        if (entry.isIntersecting) { show(entry.target); io.unobserve(entry.target); }
+        if (!entry.isIntersecting) return;
+        if (entry.target.classList.contains('tl-ev')) entry.target.style.setProperty('--k', k++);
+        show(entry.target);
+        io.unobserve(entry.target);
       });
     }, { threshold: 0.15, rootMargin: '0px 0px -8% 0px' });
     revealed.forEach((node) => io.observe(node));
+    if (timeline) {
+      const chartIo = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) { show(timeline); chartIo.disconnect(); }
+      }, { threshold: 0.35 });
+      chartIo.observe(timeline);
+      /* keyboard users never land on a card that hasn't appeared yet */
+      timeline.addEventListener('focusin', () => { show(timeline); timeline.querySelectorAll('.tl-ev').forEach(show); }, { once: true });
+    }
   } else {
     revealed.forEach(show);
+    if (timeline) show(timeline);
   }
 })();
 </script>
