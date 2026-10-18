@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://simbarashemujuru.github.io/sitemap.xml
